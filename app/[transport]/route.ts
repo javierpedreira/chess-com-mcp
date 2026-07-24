@@ -9,7 +9,12 @@ import {
   normalizeClubId,
   normalizeUsername,
 } from "@/lib/chess";
-import { buildAnalysisUrl, looksLikeFen } from "@/lib/analysis";
+import {
+  BOARD_IMAGE_SIZES,
+  buildAnalysisUrl,
+  buildBoardImageUrl,
+  looksLikeFen,
+} from "@/lib/analysis";
 import {
   errorResult,
   jsonResult,
@@ -262,6 +267,38 @@ const handler = createMcpHandler(
         return jsonResult(
           { fen: fen.trim(), analysis_url: buildAnalysisUrl(fen) },
           `analysis board URL for FEN`,
+        );
+      },
+    );
+
+    server.tool(
+      "get_board_image_url",
+      "Given a chess position (FEN), return a URL that renders the position as a PNG board image (via Chess.com's dynboard). Useful to show a diagram of a position. Note: dynboard is an unofficial, undocumented Chess.com endpoint (separate from the public API) and may change without notice.",
+      {
+        fen: fenField,
+        size: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(3)
+          .default(2)
+          .describe("Image size: 1 = 240px, 2 = 480px, 3 = 720px. Default 2."),
+      },
+      async ({ fen, size }) => {
+        if (!looksLikeFen(fen)) {
+          return textError(
+            `'${fen}' does not look like a valid FEN. Expected something like 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'.`,
+          );
+        }
+        return jsonResult(
+          {
+            fen: fen.trim(),
+            image_url: buildBoardImageUrl(fen, size),
+            content_type: "image/png",
+            dimensions_px: BOARD_IMAGE_SIZES[size] ?? 480,
+            note: "Unofficial Chess.com dynboard endpoint; renders a default green board (theme/flip/coordinates params are not supported).",
+          },
+          `board image URL for FEN`,
         );
       },
     );

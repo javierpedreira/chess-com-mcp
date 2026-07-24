@@ -10,6 +10,7 @@ const TOOLS = [
   ["get_club_profile", "Public profile of a club"],
   ["get_club_members", "Club members grouped by activity"],
   ["get_analysis_board_url", "Chess.com analysis-board link from a FEN"],
+  ["get_board_image_url", "PNG board image from a FEN (Chess.com dynboard)"],
 ] as const;
 
 export default function Home() {
