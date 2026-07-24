@@ -9,7 +9,17 @@ import {
   normalizeClubId,
   normalizeUsername,
 } from "@/lib/chess";
-import { errorResult, jsonResult, textResult } from "@/lib/mcp-results";
+import {
+  buildAnalysisUrls,
+  fetchLichessCloudEval,
+  looksLikeFen,
+} from "@/lib/analysis";
+import {
+  errorResult,
+  jsonResult,
+  textError,
+  textResult,
+} from "@/lib/mcp-results";
 
 // Run on the Node.js runtime (mcp-handler + Buffer usage), never Edge.
 export const runtime = "nodejs";
@@ -43,6 +53,13 @@ const monthField = z.coerce
   .min(1)
   .max(12)
   .describe("Month number 1-12 (will be zero-padded automatically).");
+
+const fenField = z
+  .string()
+  .min(1)
+  .describe(
+    "Chess position in FEN notation, e.g. 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'.",
+  );
 
 const handler = createMcpHandler(
   (server) => {
@@ -227,6 +244,79 @@ const handler = createMcpHandler(
           return jsonResult(data, `club members '${club}'`);
         } catch (err) {
           return errorResult(err, `club members '${club}'`);
+        }
+      },
+    );
+
+    // -------------------------------------------------------------- Analysis
+    // Note: the Chess.com public API has no engine/analysis endpoint. These
+    // tools work from a FEN using analysis-board URLs and Lichess' free,
+    // no-auth Cloud Evaluation API. Handy for training/exercise workflows.
+
+    server.tool(
+      "get_analysis_board_url",
+      "Given a chess position (FEN), return links to open it in an interactive analysis board (Chess.com and Lichess), where an engine and move exploration are available in the browser. Does not require an engine on the server.",
+      { fen: fenField },
+      async ({ fen }) => {
+        if (!looksLikeFen(fen)) {
+          return textError(
+            `'${fen}' does not look like a valid FEN. Expected something like 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'.`,
+          );
+        }
+        return jsonResult(
+          { fen: fen.trim(), analysis_urls: buildAnalysisUrls(fen) },
+          `analysis board URLs for FEN`,
+        );
+      },
+    );
+
+    server.tool(
+      "analyze_fen",
+      "Evaluate a chess position (FEN) with Stockfish via the Lichess Cloud Evaluation API, returning the engine score and best line(s). Also includes analysis-board URLs. Note: only positions present in Lichess' cloud database are covered (common/opening positions usually are; rare positions may return no evaluation — use the URLs to analyze those interactively).",
+      {
+        fen: fenField,
+        multiPv: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(5)
+          .default(1)
+          .describe("How many principal variations (best lines) to return, 1-5. Default 1."),
+      },
+      async ({ fen, multiPv }) => {
+        if (!looksLikeFen(fen)) {
+          return textError(
+            `'${fen}' does not look like a valid FEN. Expected something like 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'.`,
+          );
+        }
+        const analysisUrls = buildAnalysisUrls(fen);
+        try {
+          const cloudEval = await fetchLichessCloudEval(fen, multiPv);
+          return jsonResult(
+            {
+              fen: fen.trim(),
+              analysis_urls: analysisUrls,
+              cloud_eval: cloudEval,
+              note:
+                cloudEval === null
+                  ? "This position is not in Lichess' cloud-eval database. Open one of the analysis_urls to analyze it interactively with an engine."
+                  : "cloud_eval is the raw Lichess response. Each pv has UCI `moves`; scores are `cp` (centipawns) or `mate` (forced mate in N). Open analysis_urls to explore interactively.",
+            },
+            `cloud evaluation for FEN`,
+          );
+        } catch (err) {
+          // Never throw: fall back to the analysis-board URLs.
+          return jsonResult(
+            {
+              fen: fen.trim(),
+              analysis_urls: analysisUrls,
+              cloud_eval: null,
+              note: `Could not fetch a cloud evaluation (${
+                err instanceof Error ? err.message : String(err)
+              }). Open one of the analysis_urls to analyze the position interactively.`,
+            },
+            `cloud evaluation for FEN`,
+          );
         }
       },
     );
