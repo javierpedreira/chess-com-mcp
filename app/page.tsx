@@ -9,8 +9,7 @@ const TOOLS = [
   ["download_player_games_pgn", "Games for a month as PGN text"],
   ["get_club_profile", "Public profile of a club"],
   ["get_club_members", "Club members grouped by activity"],
-  ["get_analysis_board_url", "Analysis-board links (Chess.com/Lichess) from a FEN"],
-  ["analyze_fen", "Stockfish evaluation of a FEN via Lichess cloud eval"],
+  ["get_analysis_board_url", "Chess.com analysis-board link from a FEN"],
 ] as const;
 
 export default function Home() {

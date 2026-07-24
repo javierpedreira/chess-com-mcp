@@ -9,11 +9,7 @@ import {
   normalizeClubId,
   normalizeUsername,
 } from "@/lib/chess";
-import {
-  buildAnalysisUrls,
-  fetchLichessCloudEval,
-  looksLikeFen,
-} from "@/lib/analysis";
+import { buildAnalysisUrl, looksLikeFen } from "@/lib/analysis";
 import {
   errorResult,
   jsonResult,
@@ -249,13 +245,13 @@ const handler = createMcpHandler(
     );
 
     // -------------------------------------------------------------- Analysis
-    // Note: the Chess.com public API has no engine/analysis endpoint. These
-    // tools work from a FEN using analysis-board URLs and Lichess' free,
-    // no-auth Cloud Evaluation API. Handy for training/exercise workflows.
+    // Note: the Chess.com public API has no engine/analysis endpoint, so this
+    // tool returns a link to Chess.com's interactive analysis board (engine +
+    // move exploration run in the browser). Handy for training/exercises.
 
     server.tool(
       "get_analysis_board_url",
-      "Given a chess position (FEN), return links to open it in an interactive analysis board (Chess.com and Lichess), where an engine and move exploration are available in the browser. Does not require an engine on the server.",
+      "Given a chess position (FEN), return a link to open it in Chess.com's interactive analysis board, where an engine and move exploration are available in the browser. Does not require an engine on the server.",
       { fen: fenField },
       async ({ fen }) => {
         if (!looksLikeFen(fen)) {
@@ -264,60 +260,9 @@ const handler = createMcpHandler(
           );
         }
         return jsonResult(
-          { fen: fen.trim(), analysis_urls: buildAnalysisUrls(fen) },
-          `analysis board URLs for FEN`,
+          { fen: fen.trim(), analysis_url: buildAnalysisUrl(fen) },
+          `analysis board URL for FEN`,
         );
-      },
-    );
-
-    server.tool(
-      "analyze_fen",
-      "Evaluate a chess position (FEN) with Stockfish via the Lichess Cloud Evaluation API, returning the engine score and best line(s). Also includes analysis-board URLs. Note: only positions present in Lichess' cloud database are covered (common/opening positions usually are; rare positions may return no evaluation — use the URLs to analyze those interactively).",
-      {
-        fen: fenField,
-        multiPv: z.coerce
-          .number()
-          .int()
-          .min(1)
-          .max(5)
-          .default(1)
-          .describe("How many principal variations (best lines) to return, 1-5. Default 1."),
-      },
-      async ({ fen, multiPv }) => {
-        if (!looksLikeFen(fen)) {
-          return textError(
-            `'${fen}' does not look like a valid FEN. Expected something like 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'.`,
-          );
-        }
-        const analysisUrls = buildAnalysisUrls(fen);
-        try {
-          const cloudEval = await fetchLichessCloudEval(fen, multiPv);
-          return jsonResult(
-            {
-              fen: fen.trim(),
-              analysis_urls: analysisUrls,
-              cloud_eval: cloudEval,
-              note:
-                cloudEval === null
-                  ? "This position is not in Lichess' cloud-eval database. Open one of the analysis_urls to analyze it interactively with an engine."
-                  : "cloud_eval is the raw Lichess response. Each pv has UCI `moves`; scores are `cp` (centipawns) or `mate` (forced mate in N). Open analysis_urls to explore interactively.",
-            },
-            `cloud evaluation for FEN`,
-          );
-        } catch (err) {
-          // Never throw: fall back to the analysis-board URLs.
-          return jsonResult(
-            {
-              fen: fen.trim(),
-              analysis_urls: analysisUrls,
-              cloud_eval: null,
-              note: `Could not fetch a cloud evaluation (${
-                err instanceof Error ? err.message : String(err)
-              }). Open one of the analysis_urls to analyze the position interactively.`,
-            },
-            `cloud evaluation for FEN`,
-          );
-        }
       },
     );
   },

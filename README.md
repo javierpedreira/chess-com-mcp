@@ -39,13 +39,12 @@ El endpoint MCP queda expuesto en **`/mcp`**.
 | `get_club_members(url_id)` | `GET /pub/club/{url_id}/members` | Miembros agrupados por actividad. |
 
 ### Análisis (a partir de un FEN)
-La API de Chess.com **no tiene endpoint de motor/análisis**, así que estas tools
-analizan una posición dada en FEN por otros medios:
+La API de Chess.com **no tiene endpoint de motor/análisis**, así que esta tool
+devuelve un enlace para analizar la posición en el navegador:
 
-| Tool | Fuente | Descripción |
-| --- | --- | --- |
-| `get_analysis_board_url(fen)` | — | Enlaces para abrir la posición en el tablero de análisis de Chess.com y Lichess. |
-| `analyze_fen(fen, multiPv?)` | Lichess Cloud Eval | Evaluación de Stockfish (score + mejores líneas) vía la API gratuita y sin auth de Lichess. Solo cubre posiciones ya presentes en su base cloud; para posiciones raras devuelve los enlaces como fallback. |
+| Tool | Descripción |
+| --- | --- |
+| `get_analysis_board_url(fen)` | Enlace para abrir la posición en el tablero de análisis de Chess.com (motor y exploración de jugadas en el navegador). |
 
 > **`title`** acepta: `GM, WGM, IM, WIM, FM, WFM, NM, WNM, CM, WCM`.
 > **`url_id`** es el *slug* en minúsculas de la URL del club (p. ej.
