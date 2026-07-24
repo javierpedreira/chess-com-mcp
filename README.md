@@ -1,95 +1,94 @@
 # ♟️ Chess.com MCP Server
 
-Servidor **MCP (Model Context Protocol)** remoto para la API pública de
-[Chess.com](https://www.chess.com/news/view/published-data-api), escrito en
-TypeScript con **Next.js (App Router)** + [`mcp-handler`](https://www.npmjs.com/package/mcp-handler)
-y transporte **Streamable HTTP**.
+Remote **MCP (Model Context Protocol)** server for the public
+[Chess.com](https://www.chess.com/news/view/published-data-api) API, written in
+TypeScript with **Next.js (App Router)** + [`mcp-handler`](https://www.npmjs.com/package/mcp-handler)
+and the **Streamable HTTP** transport.
 
-Está pensado para desplegarse en **Vercel** y añadirse como *custom connector*
-remoto en [claude.ai](https://claude.ai). La API de Chess.com es pública (sin
-autenticación ni API key), así que **el conector tampoco necesita OAuth ni
-secretos**.
+It's designed to be deployed to **Vercel** and added as a remote *custom
+connector* in [claude.ai](https://claude.ai). The Chess.com API is public (no
+authentication or API key), so **the connector needs no OAuth or secrets
+either**.
 
-El endpoint MCP queda expuesto en **`/mcp`**.
+The MCP endpoint is exposed at **`/mcp`**.
 
 ---
 
-## Herramientas (tools)
+## Tools
 
-### Jugadores
-| Tool | Endpoint Chess.com | Descripción |
+### Players
+| Tool | Chess.com endpoint | Description |
 | --- | --- | --- |
-| `get_player_profile(username)` | `GET /pub/player/{username}` | Perfil público del jugador. |
-| `get_player_stats(username)` | `GET /pub/player/{username}/stats` | Ratings y récords por modalidad. |
-| `is_player_online(username)` | `GET /pub/player/{username}` | Estado online **deducido** de `last_online` (≤ 5 min ⇒ online). |
-| `get_titled_players(title)` | `GET /pub/titled/{title}` | Lista de usuarios con un título (GM, IM, …). |
+| `get_player_profile(username)` | `GET /pub/player/{username}` | Public player profile. |
+| `get_player_stats(username)` | `GET /pub/player/{username}/stats` | Ratings and records per time class. |
+| `is_player_online(username)` | `GET /pub/player/{username}` | Online status **derived** from `last_online` (≤ 5 min ⇒ online). |
+| `get_titled_players(title)` | `GET /pub/titled/{title}` | Usernames holding a given title (GM, IM, …). |
 
-### Partidas
-| Tool | Endpoint Chess.com | Descripción |
+### Games
+| Tool | Chess.com endpoint | Description |
 | --- | --- | --- |
-| `get_player_current_games(username)` | `GET /pub/player/{username}/games` | Partidas Daily en curso. |
-| `get_player_games_by_month(username, year, month)` | `GET /pub/player/{username}/games/{yyyy}/{mm}` | Partidas terminadas de un mes (JSON). |
-| `get_player_game_archives(username)` | `GET /pub/player/{username}/games/archives` | Lista de archivos mensuales disponibles. |
-| `download_player_games_pgn(username, year, month)` | `GET /pub/player/{username}/games/{yyyy}/{mm}/pgn` | Partidas de un mes en PGN (texto plano). |
+| `get_player_current_games(username)` | `GET /pub/player/{username}/games` | In-progress Daily games. |
+| `get_player_games_by_month(username, year, month)` | `GET /pub/player/{username}/games/{yyyy}/{mm}` | Finished games for a month (JSON). |
+| `get_player_game_archives(username)` | `GET /pub/player/{username}/games/archives` | List of available monthly archives. |
+| `download_player_games_pgn(username, year, month)` | `GET /pub/player/{username}/games/{yyyy}/{mm}/pgn` | Games for a month as PGN (plain text). |
 
 ### Clubs
-| Tool | Endpoint Chess.com | Descripción |
+| Tool | Chess.com endpoint | Description |
 | --- | --- | --- |
-| `get_club_profile(url_id)` | `GET /pub/club/{url_id}` | Perfil público del club. |
-| `get_club_members(url_id)` | `GET /pub/club/{url_id}/members` | Miembros agrupados por actividad. |
+| `get_club_profile(url_id)` | `GET /pub/club/{url_id}` | Public club profile. |
+| `get_club_members(url_id)` | `GET /pub/club/{url_id}/members` | Members grouped by activity. |
 
-### Análisis (a partir de un FEN)
-La API de Chess.com **no tiene endpoint de motor/análisis**, así que esta tool
-devuelve un enlace para analizar la posición en el navegador:
+### Analysis (from a FEN)
+The Chess.com public API has **no engine/analysis endpoint**, so this tool
+returns a link to analyze the position in the browser:
 
-| Tool | Descripción |
+| Tool | Description |
 | --- | --- |
-| `get_analysis_board_url(fen)` | Enlace para abrir la posición en el tablero de análisis de Chess.com (motor y exploración de jugadas en el navegador). |
+| `get_analysis_board_url(fen)` | Link to open the position in Chess.com's analysis board (engine + move exploration run in the browser). |
 
-> **`title`** acepta: `GM, WGM, IM, WIM, FM, WFM, NM, WNM, CM, WCM`.
-> **`url_id`** es el *slug* en minúsculas de la URL del club (p. ej.
+> **`title`** accepts: `GM, WGM, IM, WIM, FM, WFM, NM, WNM, CM, WCM`.
+> **`url_id`** is the lowercase *slug* from the club's URL (e.g.
 > `chess-com-developer-community`).
 
-Cada tool devuelve el JSON de Chess.com tal cual (o el texto PGN en el caso de
-`download_player_games_pgn`). Los usernames y club IDs se normalizan a
-minúsculas automáticamente.
+Each tool returns the Chess.com JSON as-is (or the PGN text for
+`download_player_games_pgn`). Usernames and club IDs are normalized to
+lowercase automatically.
 
 ---
 
-## Manejo de errores y límites
+## Error handling and limits
 
-- Si Chess.com responde **404** (jugador/club/archivo inexistente), **429**
-  (rate limit), **403** (User-Agent inválido), etc., la tool devuelve un mensaje
-  claro con `isError: true` **en lugar de lanzar una excepción sin capturar**.
-- **Sin estado**: cada llamada es independiente (apto para funciones
-  serverless). No se usa Redis; solo transporte **Streamable HTTP** (el que usan
-  los custom connectors de claude.ai).
-- **Respuestas grandes (> 1 MB):** los archivos mensuales de jugadores muy
-  activos pueden ser grandes. Las funciones serverless de Vercel tienen un
-  límite de respuesta (~4.5 MB); si se supera, la tool devuelve un mensaje
-  accionable sugiriendo alternativas (mes concreto, lista de archivos, o el PGN,
-  que es más compacto). Respuestas de entre 1 y ~4 MB se devuelven con
-  normalidad.
+- If Chess.com responds with **404** (player/club/archive not found), **429**
+  (rate limit), **403** (invalid User-Agent), etc., the tool returns a clear
+  message with `isError: true` **instead of throwing an uncaught exception**.
+- **Stateless**: every call is independent (suitable for serverless functions).
+  No Redis is used; only the **Streamable HTTP** transport (the one claude.ai
+  custom connectors use).
+- **Large responses (> 1 MB):** monthly archives for very active players can be
+  large. Vercel serverless functions have a response limit (~4.5 MB); if it's
+  exceeded, the tool returns an actionable message suggesting alternatives (a
+  specific month, the archives list, or the PGN, which is more compact).
+  Responses between 1 and ~4 MB are returned normally.
 
 ---
 
-## Requisitos
+## Requirements
 
 - Node.js ≥ 20
-- Una cuenta de [Vercel](https://vercel.com) (el plan Hobby es suficiente)
+- A [Vercel](https://vercel.com) account (the Hobby plan is enough)
 
-## Desarrollo local
+## Local development
 
 ```bash
 npm install
-cp .env.example .env.local   # opcional pero recomendado: ajusta el User-Agent
+cp .env.example .env.local   # optional but recommended: set your User-Agent
 npm run dev
 ```
 
-- Página informativa: <http://localhost:3000>
-- Endpoint MCP: <http://localhost:3000/mcp>
+- Info page: <http://localhost:3000>
+- MCP endpoint: <http://localhost:3000/mcp>
 
-Comprobación rápida (lista de tools vía Streamable HTTP):
+Quick check (list tools over Streamable HTTP):
 
 ```bash
 curl -sS http://localhost:3000/mcp \
@@ -98,88 +97,89 @@ curl -sS http://localhost:3000/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-Type-check y build:
+Type-check and build:
 
 ```bash
 npm run typecheck
 npm run build
 ```
 
-Para probarlo con el inspector oficial de MCP:
+To try it with the official MCP inspector:
 
 ```bash
 npx @modelcontextprotocol/inspector
-# En el inspector: Transport = "Streamable HTTP", URL = http://localhost:3000/mcp
+# In the inspector: Transport = "Streamable HTTP", URL = http://localhost:3000/mcp
 ```
 
 ---
 
-## Variable de entorno
+## Environment variable
 
-| Variable | Requerida | Descripción |
+| Variable | Required | Description |
 | --- | --- | --- |
-| `CHESS_API_USER_AGENT` | Recomendada | User-Agent descriptivo que Chess.com pide a los consumidores de su API (idealmente con un contacto o URL del repo). Sin un User-Agent válido, Chess.com puede responder **403**. Si no se define, se usa uno por defecto. |
+| `CHESS_API_USER_AGENT` | Recommended | Descriptive User-Agent that Chess.com asks API consumers to send (ideally with a contact or the repo URL). Without a valid User-Agent, Chess.com may respond with **403**. If unset, a default is used. |
 
 ---
 
-## Despliegue en Vercel
+## Deploy to Vercel
 
-### Opción A — desde la web (recomendada)
+### Option A — from the web (recommended)
 
-1. Sube este repositorio a GitHub (ver más abajo).
-2. En [vercel.com](https://vercel.com) → **Add New… → Project** → importa el repo.
-3. Vercel detecta Next.js automáticamente; no hace falta cambiar nada de build.
-4. (Recomendado) En **Settings → Environment Variables** añade
-   `CHESS_API_USER_AGENT` con un valor como
-   `chess-com-mcp/1.0 (+https://github.com/<tu-usuario>/chess-com-mcp; contact: tu@email.com)`.
-5. **Deploy**. Al terminar tendrás una URL tipo
-   `https://<tu-proyecto>.vercel.app`.
-6. Tu endpoint MCP es **`https://<tu-proyecto>.vercel.app/mcp`**.
+1. Push this repository to GitHub (see below).
+2. In [vercel.com](https://vercel.com) → **Add New… → Project** → import the repo.
+3. Vercel detects Next.js automatically; no build settings to change.
+4. (Recommended) Under **Settings → Environment Variables** add
+   `CHESS_API_USER_AGENT` with a value like
+   `chess-com-mcp/1.0 (+https://github.com/<your-user>/chess-com-mcp; contact: you@email.com)`.
+5. **Deploy**. When it finishes you'll get a URL like
+   `https://<your-project>.vercel.app`.
+6. Your MCP endpoint is **`https://<your-project>.vercel.app/mcp`**.
 
-### Opción B — desde la CLI
+### Option B — from the CLI
 
 ```bash
 npm i -g vercel
-vercel            # primer deploy (preview) — sigue el asistente
-vercel --prod     # deploy a producción
-# Para configurar el User-Agent:
+vercel            # first deploy (preview) — follow the wizard
+vercel --prod     # production deploy
+# To configure the User-Agent:
 vercel env add CHESS_API_USER_AGENT
 ```
 
 ---
 
-## Añadir el conector en claude.ai
+## Add the connector in claude.ai
 
-1. Abre **claude.ai → Settings (Ajustes) → Connectors**.
-2. Pulsa **Add custom connector**.
-3. Rellena:
-   - **Name:** `Chess.com` (o el que prefieras)
-   - **URL:** `https://<tu-proyecto>.vercel.app/mcp`
-4. Guarda. Como el servidor no requiere autenticación, **no** te pedirá ningún
-   paso de OAuth.
-5. En una conversación nueva, activa el conector y prueba, por ejemplo:
-   > *«Busca el perfil y las estadísticas de Hikaru en Chess.com»*
-   > *«¿Qué GMs hay en Chess.com?»*
-   > *«Descárgame en PGN las partidas de MagnusCarlsen de enero de 2024»*
+1. Open **claude.ai → Settings → Connectors**.
+2. Click **Add custom connector**.
+3. Fill in:
+   - **Name:** `Chess.com` (or whatever you prefer)
+   - **URL:** `https://<your-project>.vercel.app/mcp`
+4. Save. Since the server requires no authentication, it **won't** ask for any
+   OAuth step.
+5. In a new conversation, enable the connector and try, for example:
+   > *"Look up Hikaru's profile and stats on Chess.com"*
+   > *"Which GMs are on Chess.com?"*
+   > *"Download MagnusCarlsen's games from January 2024 as PGN"*
 
-> **Nota:** los custom connectors remotos requieren un plan de claude.ai que los
-> soporte (Pro/Team/Enterprise según disponibilidad). El transporte usado es
+> **Note:** remote custom connectors require a claude.ai plan that supports them
+> (Pro/Team/Enterprise, subject to availability). The transport used is
 > **Streamable HTTP**.
 
 ---
 
-## Estructura del proyecto
+## Project structure
 
 ```
 chess-com-mcp/
 ├── app/
 │   ├── [transport]/
-│   │   └── route.ts        # Handler MCP (GET/POST/DELETE) → expone /mcp
-│   ├── layout.tsx          # Layout de la página informativa
-│   └── page.tsx            # Landing en / que documenta el endpoint
+│   │   └── route.ts        # MCP handler (GET/POST/DELETE) → exposes /mcp
+│   ├── layout.tsx          # Layout for the info page
+│   └── page.tsx            # Landing page at / documenting the endpoint
 ├── lib/
-│   ├── chess.ts            # Cliente stateless de la API de Chess.com
-│   └── mcp-results.ts      # Formateo de resultados/errores + guarda de tamaño
+│   ├── chess.ts            # Stateless Chess.com API client
+│   ├── analysis.ts         # FEN helpers + Chess.com analysis-board URL
+│   └── mcp-results.ts      # Result/error formatting + size guard
 ├── .env.example
 ├── .gitignore
 ├── next.config.mjs
@@ -191,7 +191,7 @@ chess-com-mcp/
 
 ---
 
-## Licencia
+## License
 
-MIT. Datos servidos por la API pública de Chess.com. Proyecto no afiliado a
-Chess.com.
+MIT. Data served by the public Chess.com API. This project is not affiliated
+with Chess.com.
