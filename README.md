@@ -46,6 +46,7 @@ returns a link to analyze the position in the browser:
 | --- | --- |
 | `get_analysis_board_url(fen)` | Link to open the position in Chess.com's analysis board (engine + move exploration run in the browser). |
 | `get_board_image_url(fen, size?)` | URL rendering the position as a PNG board image via Chess.com's `dynboard` (`size` 1/2/3 = 240/480/720px). ⚠️ Unofficial, undocumented endpoint — may change without notice. |
+| `get_exercise_board(fen, pgn?, size?)` | Returns **both** an inline board image (embedded in the chat) **and** a link to Chess.com's interactive analysis board. With an optional `pgn` move line, the link starts from the position and plays through it (engine + step-by-step). Ideal for training exercises. |
 
 > **`title`** accepts: `GM, WGM, IM, WIM, FM, WFM, NM, WNM, CM, WCM`.
 > **`url_id`** is the lowercase *slug* from the club's URL (e.g.

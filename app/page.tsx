@@ -11,6 +11,7 @@ const TOOLS = [
   ["get_club_members", "Club members grouped by activity"],
   ["get_analysis_board_url", "Chess.com analysis-board link from a FEN"],
   ["get_board_image_url", "PNG board image from a FEN (Chess.com dynboard)"],
+  ["get_exercise_board", "Inline board image + interactive analysis link for a FEN (+ optional move line)"],
 ] as const;
 
 export default function Home() {

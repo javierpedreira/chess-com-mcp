@@ -13,6 +13,8 @@ import {
   BOARD_IMAGE_SIZES,
   buildAnalysisUrl,
   buildBoardImageUrl,
+  buildInteractiveLineUrl,
+  fetchBoardImage,
   looksLikeFen,
 } from "@/lib/analysis";
 import {
@@ -300,6 +302,64 @@ const handler = createMcpHandler(
           },
           `board image URL for FEN`,
         );
+      },
+    );
+
+    server.tool(
+      "get_exercise_board",
+      "Given a chess position (FEN) and optionally a line of moves, return BOTH an inline board image of the position AND a link to open it in Chess.com's interactive analysis board. If a move line is provided, the link starts from the position and plays through that line (engine + step-by-step navigation) — ideal for presenting a training exercise (a diagram in-chat plus a 'play the solution' link). The image uses Chess.com's unofficial dynboard endpoint.",
+      {
+        fen: fenField,
+        pgn: z
+          .string()
+          .optional()
+          .describe(
+            "Optional line of moves in SAN starting from the position, e.g. '28... Re2+ 29. Kg1 Rd1#'. If given, the analysis link plays through it; if omitted, the link just opens the position.",
+          ),
+        size: z.coerce
+          .number()
+          .int()
+          .min(1)
+          .max(3)
+          .default(2)
+          .describe("Board image size: 1 = 240px, 2 = 480px, 3 = 720px. Default 2."),
+      },
+      async ({ fen, pgn, size }) => {
+        if (!looksLikeFen(fen)) {
+          return textError(
+            `'${fen}' does not look like a valid FEN. Expected something like 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'.`,
+          );
+        }
+        const line = pgn?.trim() || null;
+        const analysisUrl = line
+          ? buildInteractiveLineUrl(fen, line)
+          : buildAnalysisUrl(fen);
+        const summary = {
+          fen: fen.trim(),
+          line,
+          analysis_url: analysisUrl,
+          image_url: buildBoardImageUrl(fen, size),
+        };
+        try {
+          const { base64, mimeType } = await fetchBoardImage(fen, size);
+          return {
+            content: [
+              { type: "image" as const, data: base64, mimeType },
+              { type: "text" as const, text: JSON.stringify(summary) },
+            ],
+          };
+        } catch (err) {
+          // If the image fetch fails, still return the URLs (image_url usable).
+          return jsonResult(
+            {
+              ...summary,
+              note: `Could not embed the board image inline (${
+                err instanceof Error ? err.message : String(err)
+              }); open image_url instead.`,
+            },
+            `exercise board for FEN`,
+          );
+        }
       },
     );
   },

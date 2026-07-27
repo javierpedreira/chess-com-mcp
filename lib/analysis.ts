@@ -7,6 +7,8 @@
  * on the server.
  */
 
+import { USER_AGENT } from "@/lib/chess";
+
 /**
  * Very light FEN sanity check: at least a piece-placement field with 8 ranks
  * and a side-to-move field. Chess.com's analysis board is the real authority.
@@ -43,4 +45,37 @@ export function buildBoardImageUrl(fen: string, size = 2): string {
   const trimmed = fen.trim();
   const s = size in BOARD_IMAGE_SIZES ? size : 2;
   return `https://www.chess.com/dynboard?fen=${encodeURIComponent(trimmed)}&size=${s}`;
+}
+
+/**
+ * Build a Chess.com analysis-board URL that starts from `fen` and plays through
+ * a line of SAN moves. Verified behaviour: `?fen=…&pgn=…` is rejected, but a
+ * full PGN with `[SetUp "1"]` / `[FEN "…"]` headers loads the custom start plus
+ * the moves (with engine + step-by-step navigation).
+ *
+ * @param pgn A line of moves in SAN, e.g. `28... Re2+ 29. Kg1 Rd1#`.
+ */
+export function buildInteractiveLineUrl(fen: string, pgn: string): string {
+  const fullPgn = `[SetUp "1"]\n[FEN "${fen.trim()}"]\n\n${pgn.trim()}`;
+  return `https://www.chess.com/analysis?pgn=${encodeURIComponent(fullPgn)}&tab=analysis`;
+}
+
+/**
+ * Download the `dynboard` PNG for a FEN and return it as base64, so a tool can
+ * embed it inline as MCP image content. Throws on a non-2xx response.
+ */
+export async function fetchBoardImage(
+  fen: string,
+  size = 2,
+): Promise<{ base64: string; mimeType: string }> {
+  const res = await fetch(buildBoardImageUrl(fen, size), {
+    headers: { "User-Agent": USER_AGENT },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`dynboard responded with HTTP ${res.status}`);
+  }
+  const mimeType = res.headers.get("content-type") ?? "image/png";
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return { base64: bytes.toString("base64"), mimeType };
 }
