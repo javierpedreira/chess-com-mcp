@@ -106,3 +106,49 @@ export const CHESS_TITLES = [
 ] as const;
 
 export type ChessTitle = (typeof CHESS_TITLES)[number];
+
+/** Time-control classes Chess.com tags finished games with. */
+export const TIME_CLASSES = ["daily", "rapid", "blitz", "bullet"] as const;
+
+export type TimeClass = (typeof TIME_CLASSES)[number];
+
+/** Minimal shape of a game record as returned by the monthly archive endpoint. */
+export type ChessGame = {
+  time_class?: string;
+  end_time?: number;
+  [key: string]: unknown;
+};
+
+/**
+ * Find a player's most recent finished game of a given time class.
+ *
+ * The public API has no "last game" endpoint, so this walks the player's
+ * monthly archives newest-first and stops at the first month containing a
+ * game of that time class — far cheaper than downloading every month.
+ *
+ * @param maxMonthsBack How many of the most recent archive months to scan
+ *   before giving up (default 12).
+ */
+export async function getLastGameByTimeClass(
+  username: string,
+  timeClass: TimeClass,
+  maxMonthsBack = 12,
+): Promise<{ game: ChessGame; archiveUrl: string } | null> {
+  const { archives } = await fetchJson<{ archives: string[] }>(
+    `/player/${username}/games/archives`,
+  );
+
+  const monthsToScan = archives.slice(-maxMonthsBack).reverse();
+
+  for (const archiveUrl of monthsToScan) {
+    const path = archiveUrl.slice(CHESS_API_BASE.length);
+    const { games } = await fetchJson<{ games: ChessGame[] }>(path);
+    const matches = games.filter((g) => g.time_class === timeClass);
+    if (matches.length === 0) continue;
+
+    matches.sort((a, b) => (b.end_time ?? 0) - (a.end_time ?? 0));
+    return { game: matches[0], archiveUrl };
+  }
+
+  return null;
+}

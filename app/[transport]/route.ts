@@ -6,8 +6,10 @@ import {
   fetchJson,
   fetchText,
   formatYearMonth,
+  getLastGameByTimeClass,
   normalizeClubId,
   normalizeUsername,
+  TIME_CLASSES,
 } from "@/lib/chess";
 import {
   BOARD_IMAGE_SIZES,
@@ -63,6 +65,10 @@ const fenField = z
   .describe(
     "Chess position in FEN notation, e.g. 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'.",
   );
+
+const timeClassField = z
+  .enum(TIME_CLASSES)
+  .describe("Time control class: 'daily', 'rapid', 'blitz', or 'bullet'.");
 
 const handler = createMcpHandler(
   (server) => {
@@ -213,6 +219,30 @@ const handler = createMcpHandler(
         try {
           const pgn = await fetchText(`/player/${user}/games/${yyyy}/${mm}/pgn`);
           return textResult(pgn, context);
+        } catch (err) {
+          return errorResult(err, context);
+        }
+      },
+    );
+
+    server.tool(
+      "get_player_last_game",
+      "Get a player's most recent finished game of a given time class (daily, rapid, blitz, or bullet) as structured JSON (PGN, ratings, result, time control, etc.). Much cheaper than get_player_games_by_month when you only need the latest game — scans monthly archives newest-first and stops at the first match (up to 12 months back). Wraps GET /pub/player/{username}/games/archives + GET /pub/player/{username}/games/{yyyy}/{mm}.",
+      { username: usernameField, time_class: timeClassField },
+      async ({ username, time_class }) => {
+        const user = normalizeUsername(username);
+        const context = `last ${time_class} game of '${user}'`;
+        try {
+          const result = await getLastGameByTimeClass(user, time_class);
+          if (!result) {
+            return textError(
+              `No finished '${time_class}' games found for '${user}' in the last 12 months of archives.`,
+            );
+          }
+          return jsonResult(
+            { ...result.game, archive_url: result.archiveUrl },
+            context,
+          );
         } catch (err) {
           return errorResult(err, context);
         }

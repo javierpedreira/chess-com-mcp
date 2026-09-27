@@ -29,6 +29,7 @@ The MCP endpoint is exposed at **`/mcp`**.
 | --- | --- | --- |
 | `get_player_current_games(username)` | `GET /pub/player/{username}/games` | In-progress Daily games. |
 | `get_player_games_by_month(username, year, month)` | `GET /pub/player/{username}/games/{yyyy}/{mm}` | Finished games for a month (JSON). |
+| `get_player_last_game(username, time_class)` | `GET /pub/player/{username}/games/archives` + `GET .../games/{yyyy}/{mm}` | Most recent finished game of a given time class (`daily`/`rapid`/`blitz`/`bullet`) — scans months newest-first instead of downloading a whole month. |
 | `get_player_game_archives(username)` | `GET /pub/player/{username}/games/archives` | List of available monthly archives. |
 | `download_player_games_pgn(username, year, month)` | `GET /pub/player/{username}/games/{yyyy}/{mm}/pgn` | Games for a month as PGN (plain text). |
 
